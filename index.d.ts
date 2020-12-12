@@ -1,8 +1,10 @@
 // tslint:disable:interface-name
 declare module 'binance-api-node' {
   export default function(options?: {
-    apiKey: string
-    apiSecret: string
+    apiKey: string;
+    apiSecret: string;
+    httpBase?: string;
+    httpFutures?: string;
     getTime?: () => number | Promise<number>
   }): Binance
 
