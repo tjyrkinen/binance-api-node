@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import zip from 'lodash.zipobject'
+import * as LosslessJSON from 'lossless-json';
 
 import 'isomorphic-fetch'
 
@@ -8,25 +9,40 @@ const FUTURES = 'https://fapi.binance.com'
 
 const defaultGetTime = () => Date.now()
 
+const unlossless = (v) => typeof v === 'object' && v.type === 'LosslessNumber' ? LosslessJSON.stringify(v) : v;
+
 /**
  * Build query string for uri encoded url based on json object
  */
 const makeQueryString = q =>
   q
     ? `?${Object.keys(q)
-        .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(q[k])}`)
+        .filter(k => !!q[k])
+        .map(k => {
+          const v = Array.isArray(q[k]) ? `[${q[k].map(unlossless).join(',')}]` : q[k];
+          return `${encodeURIComponent(k)}=${encodeURIComponent(unlossless(v))}`
+        } )
         .join('&')}`
     : ''
 
 /**
  * Finalize API response
  */
-const sendResult = call =>
+const sendResult = (call, {apiKey, path, queryString} = {}) =>
   call.then(res => {
-    // If response is ok, we can safely assume it is valid JSON
-    if (res.ok) {
-      return res.json()
+    if (process.env.DEBUG_BINANCE_CLIENT && (path && !path.includes('listenKey'))) {
+      res.headers.forEach(function (v, k) {
+        if (k.startsWith('x-mbx')) {
+          console.log('Binance result header for api key ' + apiKey + ' at route ' + path + ': ' + k + ' = ' + v);
+        }
+      });
     }
+
+    // If response is ok, we can safely assume it is valid JSON
+    // No. Binance api sometimes sends numbers too big to be represented as javascript numbers. We need to give special care to parsing the id numbers.
+    // if (res.ok) {
+    //   return res.json()
+    // }
 
     // Errors might come from the API itself or the proxy Binance is using.
     // For API errors the response will be valid JSON,but for proxy errors
@@ -34,7 +50,12 @@ const sendResult = call =>
     return res.text().then(text => {
       let error
       try {
-        const json = JSON.parse(text)
+        const json = LosslessJSON.parse(text)
+
+        if (res.ok) {
+          return json;
+        }
+
         // The body was JSON parseable, assume it is an API response error
         error = new Error(json.msg || `${res.status} ${res.statusText}`)
         error.code = json.code
@@ -47,6 +68,11 @@ const sendResult = call =>
       }
       throw error
     })
+  }).catch((err) => {
+    if (process.env.DEBUG_BINANCE_CLIENT) {
+      console.log(`Unexpected error in binance http client at ${path}?${queryString}, ${LosslessJSON.stringify(err.code)}`, err.message);
+    }
+    throw err;
   })
 
 /**
@@ -85,7 +111,7 @@ const publicCall = ({ endpoints }) => (path, data, method = 'GET', headers = {})
         method,
         json: true,
         headers,
-      },
+      }, {path},
     ),
   )
 
@@ -141,20 +167,21 @@ const privateCall = ({ apiKey, apiSecret, endpoints, getTime = defaultGetTime, p
       .digest('hex')
 
     const newData = noExtra ? data : { ...data, timestamp, signature }
+    const queryString = makeQueryString(newData);
 
     return sendResult(
       fetch(
         `${!path.includes('/fapi') ? endpoints.base : endpoints.futures}${path}${
-          noData ? '' : makeQueryString(newData)
+          noData ? '' : queryString
         }`,
         {
           method,
           headers: { 'X-MBX-APIKEY': apiKey },
           json: true,
         },
-      ),
-    )
-  })
+      ), {apiKey, path, queryString}
+    );
+  });
 }
 
 export const candleFields = [
@@ -360,10 +387,14 @@ export default opts => {
 
     futuresOrder: payload => order(privCall, payload, '/fapi/v1/order'),
     futuresCancelOrder: payload => privCall('/fapi/v1/order', payload, 'DELETE'),
+    futuresCancelAllOpenOrders: (payload, agent) => checkParams('futuresCancelOrder', payload, ['symbol']) && futuresPrivCall({ path: '/fapi/v1/allOpenOrders', data: payload, method: 'DELETE', agent }),
+    futuresCancelMultipleOrders: (payload, agent) => checkParams('futuresCancelMultipleOrders', payload, ['symbol']) && futuresPrivCall({ path: '/fapi/v1/batchOrders', data: payload, method: 'DELETE', agent }),
     futuresOpenOrders: payload => privCall('/fapi/v1/openOrders', payload),
     futuresPositionRisk: payload => privCall('/fapi/v1/positionRisk', payload),
     futuresAccountBalance: payload => privCall('/fapi/v2/balance', payload),
     futuresPositionMode: payload => privCall('/fapi/v1/positionSide/dual', payload, 'GET'),
     futuresPositionModeChange: payload => privCall('/fapi/v1/positionSide/dual', payload, 'POST'),
+    futuresApiReferralIfNewUser: (payload, agent) => futuresPrivCall({ path: '/fapi/v1/apiReferral/ifNewUser', data: payload, agent }),
+    futuresApiReferralOverview: (payload, agent) => futuresPrivCall({ path: '/fapi/v1/apiReferral/overview', data: payload, agent }),
   }
 }

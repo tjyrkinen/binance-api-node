@@ -2,6 +2,7 @@ import zip from 'lodash.zipobject'
 
 import httpMethods from 'http-client'
 import openWebSocket from 'open-websocket'
+import * as LosslessJSON from 'lossless-json';
 
 const BASE = 'wss://stream.binance.com:9443/ws'
 const FUTURES = 'wss://fstream.binance.com/ws'
@@ -18,7 +19,7 @@ const depth = (payload, cb) => {
         u: finalUpdateId,
         b: bidDepth,
         a: askDepth,
-      } = JSON.parse(msg.data)
+      } = LosslessJSON.parse(msg.data)
 
       cb({
         eventType,
@@ -42,7 +43,7 @@ const partialDepth = (payload, cb) => {
   const cache = (Array.isArray(payload) ? payload : [payload]).map(({ symbol, level }) => {
     const w = openWebSocket(`${BASE}/${symbol.toLowerCase()}@depth${level}`)
     w.onmessage = msg => {
-      const { lastUpdateId, bids, asks } = JSON.parse(msg.data)
+      const { lastUpdateId, bids, asks } = LosslessJSON.parse(msg.data)
       cb({
         symbol,
         level,
@@ -67,7 +68,7 @@ const candles = (payload, interval, cb) => {
   const cache = (Array.isArray(payload) ? payload : [payload]).map(symbol => {
     const w = openWebSocket(`${BASE}/${symbol.toLowerCase()}@kline_${interval}`)
     w.onmessage = msg => {
-      const { e: eventType, E: eventTime, s: symbol, k: tick } = JSON.parse(msg.data)
+      const { e: eventType, E: eventTime, s: symbol, k: tick } = LosslessJSON.parse(msg.data)
       const {
         t: startTime,
         T: closeTime,
@@ -146,7 +147,7 @@ const ticker = (payload, cb) => {
     const w = openWebSocket(`${BASE}/${symbol.toLowerCase()}@ticker`)
 
     w.onmessage = msg => {
-      cb(tickerTransform(JSON.parse(msg.data)))
+      cb(tickerTransform(LosslessJSON.parse(msg.data)))
     }
 
     return w
@@ -160,7 +161,7 @@ const allTickers = cb => {
   const w = new openWebSocket(`${BASE}/!ticker@arr`)
 
   w.onmessage = msg => {
-    const arr = JSON.parse(msg.data)
+    const arr = LosslessJSON.parse(msg.data)
     cb(arr.map(m => tickerTransform(m)))
   }
 
@@ -183,7 +184,7 @@ const aggTradesInternal = (payload, cb) => {
         a: aggId,
         f: firstId,
         l: lastId,
-      } = JSON.parse(msg.data)
+      } = LosslessJSON.parse(msg.data)
 
       cb({
         eventType,
@@ -223,7 +224,7 @@ const tradesInternal = (payload, cb) => {
         t: tradeId,
         a: sellerOrderId,
         b: buyerOrderId,
-      } = JSON.parse(msg.data)
+      } = LosslessJSON.parse(msg.data)
 
       cb({
         eventType,
@@ -320,7 +321,7 @@ const userTransforms = {
 }
 
 export const userEventHandler = cb => msg => {
-  const { e: type, ...rest } = JSON.parse(msg.data)
+  const { e: type, ...rest } = LosslessJSON.parse(msg.data)
   cb(userTransforms[type] ? userTransforms[type](rest) : { type, ...rest })
 }
 

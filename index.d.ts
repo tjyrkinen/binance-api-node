@@ -154,7 +154,30 @@ declare module 'binance-api-node' {
     }
   }
 
-  export type GetOrderOptions = {symbol: string, orderId: number} | {symbol: string, origClientOrderId: string}
+  export enum FuturesApiReferralType {
+      USDT = 1,
+      Coin = 2,
+  }
+
+  export interface FuturesApiReferralResponse {
+      brokerId: string;
+      rebateWorking: boolean;
+      ifNewUser: boolean;
+  }
+
+  export interface FuturesApiReferralOverviewResponse {
+      brokerId: string; // "ABCD1234",
+      newTraderRebateCommission: string; // "0.30000000",
+      oldTraderRebateCommission: string; // "0.20000000",
+      totalTradeUser: number; // 13,
+      unit: string; // "USDT",
+      totalTradeVol: string; // "405.54379000",
+      totalRebateVol: string; // "0.01833800",
+      time: number; //1597708800000
+  }
+
+
+  export type GetOrderOptions = {symbol: string, orderId: string} | {symbol: string, origClientOrderId: string}
 
   export interface Binance {
     accountInfo(options?: { useServerTime: boolean }): Promise<Account>
@@ -189,7 +212,7 @@ declare module 'binance-api-node' {
     getOrder(options: GetOrderOptions & {useServerTime?: boolean}): Promise<QueryOrderResult>
     cancelOrder(options: {
       symbol: string
-      orderId: number
+      orderId: string
       useServerTime?: boolean
     }): Promise<CancelOrderResult>
     cancelOpenOrders(options: {
@@ -265,7 +288,7 @@ declare module 'binance-api-node' {
     futuresOrder(options: NewOrder): Promise<Order>
     futuresCancelOrder(options: {
       symbol: string
-      orderId: number
+      orderId: string
       useServerTime?: boolean
     }): Promise<CancelOrderResult>
     futuresOpenOrders(options: {
@@ -279,15 +302,19 @@ declare module 'binance-api-node' {
       dualSidePosition: string
       recvWindow: number
     }): Promise<ChangePositionModeResult>
+    futuresApiReferralIfNewUser: (payload: { recvWindow?: number, brokerId: string, type?: FuturesApiReferralType }, agent?: Agent) => Promise<FuturesApiReferralResponse>;
+    futuresApiReferralOverview: (payload: { recvWindow?: number }, agent?: Agent) => Promise<FuturesApiReferralOverviewResponse>;
     marginOrder(options: NewOrder): Promise<Order>
     marginAllOrders(options: { symbol: string, useServerTime?: boolean }): Promise<QueryOrderResult[]>
     marginCancelOrder(options: {
       symbol: string
-      orderId?: number
+      orderId?: string
       useServerTime?: boolean
     }): Promise<CancelOrderResult>
+    futuresCancelAllOpenOrders: (payload: { symbol: string, recvWindow?: number }, agent?: Agent) => Promise<CancelAllOrderResp>;
+    futuresCancelMultipleOrders: (payload: { symbol: string, orderIdList?: string[], origClientOrderIdList?: string[], recvWindow?: number }, agent?: Agent) => Promise<(CancelOrderResult | CancelAllOrderResp)[]>;
     marginOpenOrders(options: { symbol?: string; useServerTime?: boolean }): Promise<QueryOrderResult[]>
-  }
+}
 
   export interface HttpError extends Error {
     code: number
@@ -381,21 +408,21 @@ declare module 'binance-api-node' {
     | 'MAX_ALGO_ORDERS'
 
   export interface SymbolPriceFilter {
-    filterType: SymbolFilterType
+    filterType: Extract<FFilterType, 'PRICE_FILTER'>;
     minPrice: string
     maxPrice: string
     tickSize: string
   }
 
   export interface SymbolPercentPriceFilter {
-    filterType: SymbolFilterType
+    filterType: Extract<FFilterType, 'PERCENT_PRICE'>;
     multiplierDown: string
     multiplierUp: string
     avgPriceMins: number
   }
 
   export interface SymbolLotSizeFilter {
-    filterType: SymbolFilterType
+    filterType: Extract<FFilterType, 'LOT_SIZE' | 'MARKET_LOT_SIZE'>;
     minQty: string
     maxQty: string
     stepSize: string
@@ -404,17 +431,17 @@ declare module 'binance-api-node' {
   export interface SymbolMinNotionalFilter {
     applyToMarket: boolean
     avgPriceMins: number
-    filterType: SymbolFilterType
+    filterType: Extract<FFilterType, 'MIN_NOTIONAL'>;
     minNotional: string
   }
 
   export interface SymbolMaxNumOrdersFilter {
-    filterType: SymbolFilterType
+    filterType: Extract<FFilterType, 'MAX_NUM_ORDERS'>;
     limit: number
   }
 
   export interface SymbolMaxAlgoOrdersFilter {
-    filterType: SymbolFilterType
+    filterType: Extract<FFilterType, 'MAX_ALGO_ORDERS'>;
     limit: number
   }
 
@@ -440,7 +467,7 @@ declare module 'binance-api-node' {
     quoteCommissionPrecision: number
     quoteOrderQtyMarketAllowed: boolean
     quotePrecision: number
-    status: string
+    status: 'TRADING'
     symbol: string
   }
 
@@ -454,7 +481,7 @@ declare module 'binance-api-node' {
 
   export interface OrderBook {
     lastUpdateId: number
-    asks: Bid[]
+    asks: Ask[]
     bids: Bid[]
   }
 
@@ -511,8 +538,8 @@ declare module 'binance-api-node' {
     cummulativeQuoteQty: string
     executedQty: string
     icebergQty?: string
-    orderId: number
-    orderListId: number
+    orderId: string
+    orderListId: string
     origQty: string
     price: string
     side: OrderSide
@@ -526,7 +553,7 @@ declare module 'binance-api-node' {
   }
 
   export interface OcoOrder {
-    orderListId: number
+    orderListId: string
     contingencyType: ContingencyType
     listStatusType: ListStatusType
     listOrderStatus: ListOrderStatus
@@ -609,6 +636,8 @@ declare module 'binance-api-node' {
     price: string
     quantity: string
   }
+
+  export type Ask = Bid;
 
   export interface Ticker {
     eventType: string
@@ -717,8 +746,8 @@ declare module 'binance-api-node' {
     lastQuoteTransacted: string // Last quote asset transacted quantity (i.e. lastPrice * lastQty);
     lastTradeQuantity: string // Last executed quantity
     newClientOrderId: string // Client order ID
-    orderId: number // Order ID
-    orderListId: number // OrderListId
+    orderId: string // Order ID
+    orderListId: string // OrderListId
     orderRejectReason: OrderRejectReason // Order reject reason; will be an error code.
     orderStatus: OrderStatus // Current order status
     orderTime: number // Transaction time
@@ -750,8 +779,8 @@ declare module 'binance-api-node' {
   export interface MyTrade {
     id: number
     symbol: string
-    orderId: number
-    orderListId: number
+    orderId: string
+    orderListId: string
     price: string
     qty: string
     quoteQty: string
@@ -769,8 +798,8 @@ declare module 'binance-api-node' {
     executedQty: string
     icebergQty: string
     isWorking: boolean
-    orderId: number
-    orderListId: number
+    orderId: string
+    orderListId: string
     origQty: string
     origQuoteOrderQty: string
     price: string
@@ -787,8 +816,8 @@ declare module 'binance-api-node' {
   export interface CancelOrderResult {
     symbol: string
     origClientOrderId: string
-    orderId: number
-    orderListId: number
+    orderId: string
+    orderListId: string
     clientOrderId: string
     price: string
     origQty: string
@@ -798,6 +827,11 @@ declare module 'binance-api-node' {
     timeInForce: string
     type: string
     side: string
+  }
+
+  export interface CancelAllOrderResp {
+    code: string,
+    msg: string
   }
 
   export interface AvgPriceResult {
