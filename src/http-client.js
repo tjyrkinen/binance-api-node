@@ -387,14 +387,14 @@ export default opts => {
 
     futuresOrder: payload => order(privCall, payload, '/fapi/v1/order'),
     futuresCancelOrder: payload => privCall('/fapi/v1/order', payload, 'DELETE'),
-    futuresCancelAllOpenOrders: (payload, agent) => checkParams('futuresCancelOrder', payload, ['symbol']) && futuresPrivCall({ path: '/fapi/v1/allOpenOrders', data: payload, method: 'DELETE', agent }),
-    futuresCancelMultipleOrders: (payload, agent) => checkParams('futuresCancelMultipleOrders', payload, ['symbol']) && futuresPrivCall({ path: '/fapi/v1/batchOrders', data: payload, method: 'DELETE', agent }),
+    futuresCancelAllOpenOrders: (payload, agent) => checkParams('futuresCancelOrder', payload, ['symbol']) && privCall({ path: '/fapi/v1/allOpenOrders', data: payload, method: 'DELETE', agent }),
+    futuresCancelMultipleOrders: (payload, agent) => checkParams('futuresCancelMultipleOrders', payload, ['symbol']) && privCall({ path: '/fapi/v1/batchOrders', data: payload, method: 'DELETE', agent }),
     futuresOpenOrders: payload => privCall('/fapi/v1/openOrders', payload),
     futuresPositionRisk: payload => privCall('/fapi/v1/positionRisk', payload),
     futuresAccountBalance: payload => privCall('/fapi/v2/balance', payload),
     futuresPositionMode: payload => privCall('/fapi/v1/positionSide/dual', payload, 'GET'),
     futuresPositionModeChange: payload => privCall('/fapi/v1/positionSide/dual', payload, 'POST'),
-    futuresApiReferralIfNewUser: (payload, agent) => futuresPrivCall({ path: '/fapi/v1/apiReferral/ifNewUser', data: payload, agent }),
-    futuresApiReferralOverview: (payload, agent) => futuresPrivCall({ path: '/fapi/v1/apiReferral/overview', data: payload, agent }),
+    futuresApiReferralIfNewUser: (payload, agent) => privCall({ path: '/fapi/v1/apiReferral/ifNewUser', data: payload, agent }),
+    futuresApiReferralOverview: (payload, agent) => privCall({ path: '/fapi/v1/apiReferral/overview', data: payload, agent }),
   }
 }
